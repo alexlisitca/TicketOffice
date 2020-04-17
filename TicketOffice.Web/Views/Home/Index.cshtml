@@ -1,0 +1,99 @@
+﻿@model PagedList<Show>
+@{
+    ViewData["Title"] = "Home Page";
+    bool showActions = User.Identity.IsAuthenticated;
+    bool isAdmin = User.IsInRole("Admin");
+}
+
+<div class="row">
+    @if (isAdmin)
+    {
+        <div class="row mb-3 ml-1">
+            <button type="button" class="btn btn-outline-primary btn-sm" data-bind="click: addSpectacle">Добавить</button>
+        </div>
+    }
+    <table class="table">
+        <thead>
+            <tr>
+                <th scope="col">Название</th>
+                <th scope="col">Начало</th>
+                <th scope="col">Окончание</th>
+                <th scope="col">Количество билетов</th>
+                <th scope="col">Действия</th>
+            </tr>
+        </thead>
+        <tbody data-bind="foreach: spectacleList">
+            <tr id="$data.id">
+                <td data-bind="text: $data.name" />
+                <td data-bind="text: $data.startDate().format('DD.MM.YYYY HH:mm')" />
+                <td data-bind="text: $data.endDate().format('DD.MM.YYYY HH:mm')" />
+                <td data-bind="text: $data.ticketCount" />
+                <td>
+
+                    @if (showActions)
+                    {
+                        @if (isAdmin)
+                        {
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bind="click: function(){ changeSpectacle($data); }">Изменить</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-outline-success btn-sm" data-bind="click: function(){ bookTicket($data); }">Забронировать</button>
+                        }
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-outline-success btn-sm" disabled title="Войдите в аккаунт для этого действия">Забронировать</button>
+                    }
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+<div class="row justify-content-center text-center">
+    <nav aria-label="Page navigation example">
+        <ul class="pagination justify-content-center">
+            <li class="page-item" data-bind="visible: hasPrevious">
+                <a class="page-link" href="@Url.Action("Index", "Home", new { page = Model.PageIndex - 2 })">Previous</a>
+            </li>
+            @for (int i = 0; i < Model.TotalPages; i++)
+            {
+                <li class="page-item @(i + 1 == Model.PageIndex ? "active" : "")"><a class="page-link" href="@Url.Action("Index", "Home", new { page = i })">@(i + 1)</a></li>
+            }
+            <li class="page-item" data-bind="visible: hasNext">
+                <a class="page-link" href="@Url.Action("Index", "Home", new { page = Model.PageIndex })">Next</a>
+            </li>
+        </ul>
+    </nav>
+</div>
+<div class="modal fade" tabindex="-1" role="dialog" id="idSpectacleDetailModal">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали спектакля</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <input class="form-control" type="text" placeholder="Название спектакля" data-bind="value: spectacleModalModel.name">
+                </div>
+                <div class="form-group">
+                    <input type="date" class="form-control" name="spectacleStartDate" placeholder="Дата спектакля">
+                </div>
+                <div class="form-group">
+                    <input class="form-control" type="number" placeholder="Количество билетов" data-bind="value: spectacleModalModel.ticketCount">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bind="click: spectacleModalModel.saveChanges">Сохранить</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script type="text/javascript">
+    window.__baseUrl = '@Url.Content("~")';
+    window.__pageModel = @Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(Model, Newtonsoft.Json.Formatting.Indented));
+</script>

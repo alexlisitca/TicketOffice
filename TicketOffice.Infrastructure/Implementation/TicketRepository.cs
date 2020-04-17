@@ -4,6 +4,7 @@ using System;
 using System.Threading.Tasks;
 using TicketOffice.Database;
 using TicketOffice.Domain.Entities;
+using TicketOffice.Domain.Models.Tickets;
 using TicketOffice.Domain.Repositories;
 
 namespace TicketOffice.Infrastructure.Implementation
@@ -19,7 +20,7 @@ namespace TicketOffice.Infrastructure.Implementation
             _logger = logger;
         }
 
-        public async Task<bool> BookTicket(Show show, Guid userId)
+        public async Task<TicketViewModel> BookTicket(Show show, Guid userId)
         {
             var ticket = new Ticket()
             {
@@ -32,28 +33,28 @@ namespace TicketOffice.Infrastructure.Implementation
             {
                 await _db.Tickets.AddAsync(ticket);
                 await _db.SaveChangesAsync();
-                return true;
+                return new TicketViewModel() { Id = ticket.Id, UserId = ticket.UserId };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
-                return false;
+                return null;
             }
         }
 
-        public async Task<bool> UnbookTicket(Guid ticketId)
+        public async Task<TicketViewModel> UnbookTicket(Guid ticketId)
         {
             try
             {
                 var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId);
                 var record = _db.Tickets.Remove(ticket);
                 await _db.SaveChangesAsync();
-                return true;
+                return new TicketViewModel() { Id = ticket.Id, UserId = ticket.UserId };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
-                return false;
+                return null;
             }
         }
     }

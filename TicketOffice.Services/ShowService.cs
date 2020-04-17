@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using TicketOffice.Domain.Entities;
 using TicketOffice.Domain.Models;
+using TicketOffice.Domain.Models.Shows;
 using TicketOffice.Domain.Repositories;
 using TicketOffice.Domain.Services;
 
@@ -22,7 +23,7 @@ namespace TicketOffice.Services
             _notificationService = notificationService;
         }
 
-        public async Task<bool> AddShow(string name, DateTime showDate, TimeSpan showDuration, int ticketCount)
+        public async Task<ShowViewModel> AddShow(string name, DateTime showDate, TimeSpan showDuration, int ticketCount)
         {
 
             var show = new Show()
@@ -41,11 +42,11 @@ namespace TicketOffice.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
-                return false;
+                return null;
             }
         }
 
-        public async Task<PagedList<Show>> GetPage(GridFilter filter, int page, int pageSize)
+        public async Task<PagedList<ShowViewModel>> GetPage(GridFilter filter, int page, int pageSize)
         {
             try
             {
@@ -54,7 +55,7 @@ namespace TicketOffice.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
-                return new PagedList<Show>(Enumerable.Empty<Show>(), 0, pageSize, 0);
+                return new PagedList<ShowViewModel>(Enumerable.Empty<ShowViewModel>(), 0, pageSize, 0);
             }
         }
 
@@ -63,13 +64,12 @@ namespace TicketOffice.Services
             return await _showRepository.GetById(showId);
         }
 
-        public async Task<bool> UpdateShow(Guid showId, string name, DateTime showDate, TimeSpan showDuration, int ticketCount)
+        public async Task<ShowViewModel> UpdateShow(Guid showId, string name, DateTime showDate, TimeSpan showDuration, int ticketCount)
         {
-
+            ShowViewModel result = null;
             try
             {
                 var show = await _showRepository.GetById(showId);
-
                 if (show == null)
                     throw new Exception($"ShowRepository.GetById return empty show by showId: {showId}");
 
@@ -77,9 +77,9 @@ namespace TicketOffice.Services
                 show.Name = name;
                 show.ShowDate = showDate;
                 show.TicketCount = ticketCount;
-                var result = await _showRepository.Update(show);
+                result = await _showRepository.Update(show);
 
-                if (result)
+                if (result != null)
                     await _notificationService.NotifacteUserList(show.Tickets.Select(x => x.UserId.ToString()).Distinct().ToList());
                 else
                     throw new Exception($"ShowRepository.Update method return bad result for showId: {showId}");
@@ -87,10 +87,10 @@ namespace TicketOffice.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
-                return false;
+                return result;
             }
 
-            return true;
+            return result;
         }
     }
 }

@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using TicketOffice.Database;
 using TicketOffice.Domain.Entities;
 using TicketOffice.Domain.Models;
+using TicketOffice.Domain.Models.Shows;
+using TicketOffice.Domain.Models.Tickets;
 using TicketOffice.Domain.Repositories;
 
 namespace TicketOffice.Infrastructure.Implementation
@@ -22,18 +24,18 @@ namespace TicketOffice.Infrastructure.Implementation
             _logger = logger;
         }
 
-        public async Task<bool> Add(Show show)
+        public async Task<ShowViewModel> Add(Show show)
         {
             try
             {
                 var result = await _db.Shows.AddAsync(show);
                 await _db.SaveChangesAsync();
-                return true;
+                return new ShowViewModel(show.Tickets) { Id = show.Id, Name = show.Name, Duration = show.Duration, ShowDate = show.ShowDate, TicketCount = show.TicketCount };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
-                return false;
+                return null;
             }
         }
 
@@ -42,9 +44,9 @@ namespace TicketOffice.Infrastructure.Implementation
             return await _db.Shows.Include(s => s.Tickets).Where(s => s.Id == showId).FirstOrDefaultAsync();
         }
 
-        public async Task<PagedList<Show>> GetList(GridFilter filter, int page, int pageSize)
+        public async Task<PagedList<ShowViewModel>> GetList(GridFilter filter, int page, int pageSize)
         {
-            var shows = _db.Shows.AsQueryable();
+            var shows = _db.Shows.Include(s => s.Tickets).AsQueryable();
 
             if (filter.FromDate != null)
                 shows = shows.Where(s => s.ShowDate > filter.FromDate);
@@ -56,21 +58,32 @@ namespace TicketOffice.Infrastructure.Implementation
                 shows = shows.Where(s => s.Name.Contains(filter.ShowName));
 
             shows = shows.Skip(page * pageSize).Take(pageSize).AsQueryable();
-            return new PagedList<Show>(shows, page, pageSize, _db.Shows.Count());
+
+            var showVm = shows.Select(
+                s => new ShowViewModel(s.Tickets) {
+                    Id = s.Id, 
+                    Name = s.Name, 
+                    Duration = s.Duration, 
+                    ShowDate = s.ShowDate, 
+                    TicketCount = s.TicketCount 
+                }
+            );
+
+            return new PagedList<ShowViewModel>(showVm, page, pageSize, _db.Shows.Count());
         }
 
-        public async Task<bool> Update(Show show)
+        public async Task<ShowViewModel> Update(Show show)
         {
             try
             {
                 var result = _db.Shows.Update(show);
                 await _db.SaveChangesAsync();
-                return true;
+                return new ShowViewModel(show.Tickets) { Id = show.Id, Name = show.Name, Duration = show.Duration, ShowDate = show.ShowDate, TicketCount = show.TicketCount };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
-                return false;
+                return null;
             }
         }
     }

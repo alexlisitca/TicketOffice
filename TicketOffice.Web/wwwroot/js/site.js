@@ -1,32 +1,36 @@
-﻿if (window.__pageModel != null && window.__pageModel != undefined) {
+﻿if (window.ticketOfficeOptions != null && window.ticketOfficeOptions != undefined) {
 
-    var Url = {
-        Action: function (action, controller, attrs) {
-            window.__baseUrl = window.__baseUrl.replace(/\/$/, "");
-            var arr = [];
-            arr.push(window.__baseUrl);
-            if (attrs && attrs.area)
-                arr.push(attrs.area);
-            if (controller)
-                arr.push(controller);
-            if (action)
-                arr.push(action);
-            if (attrs && attrs.id)
-                arr.push(attrs.id);
-            return arr.join("/");
-        }
+    function TicketListItem(ticket) {
+        var self = this;
+        ticket = ticket || { id: null, userId: null };
+        self.id = ko.observable(ticket.id);
+        self.userId = ko.observable(ticket.userId);
     };
 
     function SpectacleListItem(spectacle) {
         var self = this;
-        spectacle = spectacle || { Id: null, Name: "", ShowDate: moment(), Duration: moment.duration('02:00:00'), TicketCount: null };
-        self.id = ko.observable(spectacle.Id);
-        self.name = ko.observable(spectacle.Name);
-        self.startDate = ko.observable(moment(spectacle.ShowDate));
-        self.duration = ko.observable(moment.duration(spectacle.Duration));
-        self.ticketCount = ko.observable(spectacle.TicketCount);
+        spectacle = spectacle || { id: null, name: "", showDate: moment(), duration: moment.duration('02:00:00'), ticketCount: null, tickets: [] };
+        self.id = ko.observable(spectacle.id);
+        self.name = ko.observable(spectacle.name);
+        self.startDate = ko.observable(moment(spectacle.showDate));
+        self.duration = ko.observable(moment.duration(spectacle.duration));
+        self.ticketCount = ko.observable(spectacle.ticketCount);
         self.endDate = ko.computed(function () {
             return self.startDate().clone().add(self.duration().hours(), 'hours').add(self.duration().minutes(), 'minutes');
+        });
+        self.ticketsToVm = function (tickets) {
+            return ko.utils.arrayMap(tickets, function (ticket) {
+                return new TicketListItem(ticket);
+            });
+        };
+        self.tickets = ko.observableArray(self.ticketsToVm(spectacle.tickets));
+        self.availableTicketCount = ko.computed(function () {
+            return self.ticketCount() - self.tickets().length;
+        });
+        self.userHasTicket = ko.computed(function () {
+            return self.tickets().filter(function (ticket) {
+                return ticket.userId() === window.ticketOfficeOptions.currentUser.id;
+            }).length > 0;
         });
     };
 
@@ -62,28 +66,44 @@
             duration: ko.observable(),
             ticketCount: ko.observable(),
             saveChanges: function () {
-                $.ajax({
-                    type: "POST",
-                    url: Url.Action("CreateOrUpdateShow", "Home"),
-                    data: {
-                        id: self.spectacleModalModel.id() || '00000000-0000-0000-0000-000000000000',
-                        name: self.spectacleModalModel.name(),
-                        showDate: self.spectacleModalModel.startDate().format(),
-                        duration: self.spectacleModalModel.duration().hours() + ':' + self.spectacleModalModel.duration().minutes(),
-                        ticketCount: self.spectacleModalModel.ticketCount(),
-                    },
-                    success: function (data) {
-                        location.reload();
-                    },
-                    error: function (err) {
-                        console.log(err.status + " - " + err.statusText);
-                    }
-                });
+                $.post(Url.Action("CreateOrUpdateShow", "Shows"), {
+                    id: self.spectacleModalModel.id() || '00000000-0000-0000-0000-000000000000',
+                    name: self.spectacleModalModel.name(),
+                    showDate: self.spectacleModalModel.startDate().format(),
+                    duration: self.spectacleModalModel.duration().hours() + ':' + self.spectacleModalModel.duration().minutes(),
+                    ticketCount: self.spectacleModalModel.ticketCount(),
+                })
+                    .done(function (changedSpectacle) {
+                        var spectacle = self.spectacleList().filter(function (spectacle) {
+                            return spectacle.id() === changedSpectacle.id;
+                        })[0];
+
+                        if (spectacle === undefined) {
+                            // add
+                            self.spectacleList.push(new SpectacleListItem(changedSpectacle));
+                        }
+                        else {
+                            // update
+                            spectacle.name(changedSpectacle.name);
+                            spectacle.startDate(moment(changedSpectacle.showDate));
+                            spectacle.duration(moment.duration(changedSpectacle.duration));
+                            spectacle.ticketCount(changedSpectacle.ticketCount);
+                        }
+                        $("#idSpectacleDetailModal").modal('hide');
+                    })
+                    .fail(function () {
+                        alert("Ошибка запси спектакля");
+                    });
             }
         };
-        self.spectacleList = ko.observableArray(self.spectaclesToVm(window.__pageModel.Data || []));
-        self.hasPrevious = ko.observable(window.__pageModel.HasPrevious);
-        self.hasNext = ko.observable(window.__pageModel.HasNext);
+        self.spectacleList = ko.observableArray(self.spectaclesToVm([]));
+        self.hasPrevious = ko.observable(false);
+        self.hasNext = ko.observable(false);
+
+        self.currentUserId = ko.observable(window.ticketOfficeOptions.currentUser.id);
+        self.isAuthenticated = ko.observable(window.ticketOfficeOptions.currentUser.isAuthenticated);
+        self.isInRoleAdmin = ko.observable(window.ticketOfficeOptions.currentUser.isInRoleAdmin);
+        self.baseUrl = ko.observable(window.ticketOfficeOptions.baseUrl);
         /* Переменные */
 
         self.openSpectacleModal = function (spectacle) {
@@ -106,20 +126,63 @@
         };
 
         self.bookTicket = function (row) {
-            $.ajax({
-                type: "POST",
-                url: Url.Action("BookTicket", "Home"),
-                data: {
-                    showId: row.id(),
-                },
-                success: function (data) {
+            if (!self.isAuthenticated())
+                alert("Войдите в систему");
+            $.post(Url.Action("BookTicket", "Tickets"), { showId: row.id() })
+                .done(function (newTicket) {
                     alert('Вы успешно забронировали билет');
-                },
-                error: function (err) {
+                    row.tickets.push(new TicketListItem(newTicket));
+                })
+                .fail(function () {
                     alert('Невозможно забронировать билет, возможно нет мест');
-                }
+                });
+        };
+        self.unbookTicket = function (row) {
+            if (!self.isAuthenticated())
+                alert("Войдите в систему");
+
+            var ticket = row.tickets().filter(function (ticket) {
+                return ticket.userId() === self.currentUserId();
+            })[0];
+
+            $.post(Url.Action("UnbookTicket", "Tickets"), { ticketId: ticket.id() })
+                .done(function (newTicket) {
+                    alert('Вы успешно отменили бронь билета');
+                    row.tickets.remove(ticket);
+                })
+                .fail(function () {
+                    alert('Невозможно отменить бронь билета');
+                });
+        };
+
+        self.paging = {
+            currentPage: ko.observable(0),
+            hasNext: ko.observable(false),
+            hasPrevious: ko.observable(false),
+            totalCount: ko.observable(0),
+            totalPages: ko.observable(0)
+        };
+        self.filter = {
+            fromDate: ko.observable(),
+            toDate: ko.observable(),
+            showName: ko.observable()
+        }
+
+        self.init = function () {
+            $.getJSON(Url.Action("Index", "Shows"), function (data) {
+                self.spectacleList(self.spectaclesToVm(data.data));
+                self.paging.currentPage(data.pageIndex);
+                self.paging.hasNext(data.hasNext);
+                self.paging.hasPrevious(data.hasPrevious);
+                self.paging.totalCount(data.totalCount);
+                self.paging.totalPages(data.totalPages);
             });
         };
-    }
+        self.init();
+        //$('#idAlertModal').alert();
+    };
+    var spectacleModel = function () {
+
+    };
     ko.applyBindings(viewModel);
 }

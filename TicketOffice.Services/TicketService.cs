@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using System;
 using System.Threading.Tasks;
+using TicketOffice.Domain.Entities;
+using TicketOffice.Domain.Models.Tickets;
 using TicketOffice.Domain.Repositories;
 using TicketOffice.Domain.Services;
 
@@ -19,25 +21,25 @@ namespace TicketOffice.Services
             _showRepository = showRepository;
         }
 
-        public async Task<bool> BookTicket(Guid showId, Guid userId)
+        public async Task<TicketViewModel> BookTicket(Guid showId, Guid userId)
         {
             try
             {
                 var show = await _showRepository.GetById(showId);
 
                 if (show.Tickets.Count >= show.TicketCount)
-                    return false;
+                    return null;
 
                 return await _ticketRepository.BookTicket(show, userId);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
-                return false;
+                return null;
             }
         }
 
-        public async Task<bool> UnbookTicket(Guid ticketId)
+        public async Task<TicketViewModel> UnbookTicket(Guid ticketId)
         {
             try
             {
@@ -46,7 +48,7 @@ namespace TicketOffice.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
-                return false;
+                return null;
             }
         }
     }
